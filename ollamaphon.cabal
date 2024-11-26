@@ -1,0 +1,36 @@
+cabal-version:      3.0
+name:               ollamaphon
+version:            0.1.0.0
+-- synopsis:
+-- description:
+license:            GPL-3.0-or-later
+license-file:       LICENSE
+author:             polymorphicengine
+maintainer:         gius_martin@yahoo.de
+-- copyright:
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common warnings
+    ghc-options: -Wall
+                 -threaded
+
+executable ollamaphon
+    import:           warnings
+    main-is:          Main.hs
+    -- other-modules:
+    -- other-extensions:
+    build-depends:    base ^>=4.19.1.0,
+                      text,
+                      jack,
+                      transformers,
+                      explicit-exception,
+                      array,
+                      bytestring,
+                      ollama-haskell,
+                      random,
+                      mtl,
+                      haskeline
+    hs-source-dirs:   app
+    default-language: Haskell2010
