@@ -96,27 +96,28 @@ gen :: IORef B.ByteString -> String -> Ollamaphon ()
 gen ref msg = do
   n <- lift $ gets name
   st <- lift get
-  liftIO $
-    void $
+  void $
+    liftIO $
       generate
         defaultGenerateOps
           { modelName = n,
             prompt = T.pack msg,
-            stream = Just (\g -> runOllamaphon (streamAction ref g) st, return ()),
-            raw = Just False
+            stream = Just (\g -> runOllamaphon (streamAction ref g) st, return ())
           }
 
 streamAction :: IORef B.ByteString -> GenerateResponse -> Ollamaphon ()
 streamAction ref g = do
   x <- liftIO $ randomReplace $ T.unpack $ response_ g
   liftIO $ putStr x
-  switch ref (response_ g)
+  switch ref g
 
-switch :: IORef B.ByteString -> T.Text -> Ollamaphon ()
-switch ref t = do
+switch :: IORef B.ByteString -> GenerateResponse -> Ollamaphon ()
+switch ref g = do
   refr <- lift $ gets mode
   enc <- lift $ gets encoding
-  liftIO $ modifyIORef' ref (refr $ enc t)
+  if not (done g)
+    then liftIO $ modifyIORef' ref (refr $ enc $ response_ g)
+    else liftIO $ modifyIORef' ref (const "")
 
 -----------------------------------------
 --------------- settings ----------------
@@ -171,3 +172,43 @@ initial = displayBanner >> displayHelp
 
 banner :: String
 banner = "   _      _      _      _      _      _      _      _      _      _      _   \n _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_ \n(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)\n (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_) \n   _                                                                     _   \n _( )_      ___  _ _                             _                     _( )_ \n(_ o _)    / _ \\| | | __ _ _ __ ___   __ _ _ __ | |__   ___  _ __     (_ o _)\n (_,_)    | | | | | |/ _` | '_ ` _ \\ / _` | '_ \\| '_ \\ / _ \\| '_ \\     (_,_) \n   _      | |_| | | | (_| | | | | | | (_| | |_) | | | | (_) | | | |      _   \n _( )_     \\___/|_|_|\\__,_|_| |_| |_|\\__,_| .__/|_| |_|\\___/|_| |_|    _( )_ \n(_ o _)                                   |_|                         (_ o _)\n (_,_)                                                                 (_,_) \n   _      _      _      _      _      _      _      _      _      _      _   \n _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_ \n(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)\n (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_) "
+
+-----------------------------------------
+--------------- automatic ---------------
+-----------------------------------------
+
+autoinit :: IORef B.ByteString -> Ollamaphon ()
+autoinit ref = do
+  respref <- liftIO $ newIORef ""
+  maymsg <- getInputLine "Enter initial prompt: "
+  outputStr "\n"
+  case maymsg of
+    Just msg -> autoloop respref ref (T.pack msg)
+    Nothing -> outputStrLn "Ran into an error"
+
+autoloop :: IORef T.Text -> IORef B.ByteString -> T.Text -> Ollamaphon ()
+autoloop respref ref old = do
+  autogen respref ref old
+  outputStr "\n"
+  x <- liftIO (readIORef respref)
+  liftIO $ flushResponse respref
+  autoloop respref ref x
+
+autogen :: IORef T.Text -> IORef B.ByteString -> T.Text -> Ollamaphon ()
+autogen respref ref msg = do
+  n <- lift $ gets name
+  st <- lift get
+  void $
+    liftIO $
+      generate
+        defaultGenerateOps
+          { modelName = n,
+            prompt = msg,
+            stream = Just (\g -> runOllamaphon (streamAction ref g) st >> accumResponse (response_ g) respref, return ())
+          }
+
+accumResponse :: T.Text -> IORef T.Text -> IO ()
+accumResponse new ref = modifyIORef' ref (\old -> T.concat [old, new])
+
+flushResponse :: IORef T.Text -> IO ()
+flushResponse ref = modifyIORef' ref (const "")
