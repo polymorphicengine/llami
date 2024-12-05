@@ -2,6 +2,7 @@
 
 module Main where
 
+import Control.Concurrent.MVar
 import Control.Monad (void)
 import qualified Control.Monad.Exception.Synchronous as Sync
 import Control.Monad.State (StateT, evalStateT, get, gets, lift, liftIO, modify)
@@ -40,10 +41,10 @@ main :: IO ()
 main = do
   hSetBuffering stdout NoBuffering
   hSetBuffering stdin NoBuffering
-  ref <- newIORef ""
+  ref <- newMVar ""
   mainAudio ref
 
-mainAudio :: IORef B.ByteString -> IO ()
+mainAudio :: MVar B.ByteString -> IO ()
 mainAudio be = do
   pName <- getProgName
   ref <- newIORef (0 :: Int)
@@ -55,13 +56,13 @@ mainAudio be = do
             Trans.lift (runOllamaphon (initial >> loop be) initialState)
 
 -- actual audio process
-processBeat :: (JackExc.ThrowsErrno e) => Main.Port Jack.Output -> IORef Int -> IORef B.ByteString -> Jack.NFrames -> Sync.ExceptionalT e IO ()
+processBeat :: (JackExc.ThrowsErrno e) => Main.Port Jack.Output -> IORef Int -> MVar B.ByteString -> Jack.NFrames -> Sync.ExceptionalT e IO ()
 processBeat output ref be nframes = Trans.lift $ do
   outArr <- getBufferArray output nframes
   mapM_
     ( \i -> do
         n <- getNow ref
-        b <- readIORef be
+        b <- readMVar be
         let x = if B.length b > 0 then B.index b (mod (fromIntegral n) (B.length b)) else 0
         writeArray outArr (Jack.nframesIndices nframes !! i) (fromIntegral x / 127 - 1)
     )
@@ -71,14 +72,16 @@ getNow :: IORef Int -> IO Int
 getNow ref = modifyIORef' ref (+ 1) >> readIORef ref
 
 -- chat loop
-loop :: IORef B.ByteString -> Ollamaphon ()
+loop :: MVar B.ByteString -> Ollamaphon ()
 loop ref = do
+  x <- liftIO $ takeMVar ref
   maymsg <- getInputLine ">> "
+  liftIO $ putMVar ref x
   outputStr "\n"
   case maymsg of
     Just "\\quit" -> return ()
     Just "\\help" -> displayHelp >> loop ref
-    Just "\\reset" -> reset ref >> loop ref
+    -- Just "\\reset" -> reset ref >> loop ref
     Just "\\banner" -> displayBanner >> outputStr "\n" >> loop ref
     Just "\\accum" -> changeMode accumulate >> loop ref
     Just "\\replace" -> changeMode replaceOld >> loop ref
@@ -92,7 +95,7 @@ loop ref = do
     Nothing -> return ()
 
 -- generates response via ollama
-gen :: IORef B.ByteString -> String -> Ollamaphon ()
+gen :: MVar B.ByteString -> String -> Ollamaphon ()
 gen ref msg = do
   n <- lift $ gets name
   st <- lift get
@@ -105,26 +108,26 @@ gen ref msg = do
             stream = Just (\g -> runOllamaphon (streamAction ref g) st, return ())
           }
 
-streamAction :: IORef B.ByteString -> GenerateResponse -> Ollamaphon ()
+streamAction :: MVar B.ByteString -> GenerateResponse -> Ollamaphon ()
 streamAction ref g = do
   x <- liftIO $ randomReplace $ T.unpack $ response_ g
   liftIO $ putStr x
   switch ref g
 
-switch :: IORef B.ByteString -> GenerateResponse -> Ollamaphon ()
+switch :: MVar B.ByteString -> GenerateResponse -> Ollamaphon ()
 switch ref g = do
   refr <- lift $ gets mode
   enc <- lift $ gets encoding
   if not (done g)
-    then liftIO $ modifyIORef' ref (refr $ enc $ response_ g)
-    else liftIO $ modifyIORef' ref (const "")
+    then liftIO $ modifyMVar_ ref (return . refr (enc $ response_ g))
+    else liftIO $ modifyMVar_ ref (const $ return "")
 
 -----------------------------------------
 --------------- settings ----------------
 -----------------------------------------
 
-reset :: IORef B.ByteString -> Ollamaphon ()
-reset ref = lift $ liftIO $ modifyIORef' ref (const "")
+-- reset :: IORef B.ByteString -> Ollamaphon ()
+-- reset ref = lift $ liftIO $ modifyIORef' ref (const "")
 
 changeEncoding :: (T.Text -> B.ByteString) -> Ollamaphon ()
 changeEncoding x = lift $ modify (\st -> st {encoding = x})
@@ -205,7 +208,7 @@ autogen respref ref msg = do
         defaultGenerateOps
           { modelName = n,
             prompt = msg,
-            stream = Just (\g -> runOllamaphon (streamAction ref g) st >> accumResponse (response_ g) respref, return ())
+            stream = Just (\g -> {- runOllamaphon (streamAction ref g) st >> -} accumResponse (response_ g) respref, return ())
           }
 
 accumResponse :: T.Text -> IORef T.Text -> IO ()
