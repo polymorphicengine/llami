@@ -152,7 +152,8 @@ utf16BE = T.encodeUtf16BE
 
 randomReplace :: String -> IO String
 randomReplace s = do
-  let rep = "$%#@*&^()!" :: String
+  let emojis = "☄💓💖💕💞💘✨⭐🌟" :: String
+  let rep = "$%#@*&^()!.*.⋆⍣ ೋ┊͙ ˘͈ᵕ˘͈⋆.ೃ࿔*:･*ੈ✩‧₊˚.ೃ࿐*˚˚·.༉‧₊˚.࿐ˊˎ-▓⋆·ˏˋ°•*⁀➷⋇⊶⊰⊱⊷⋇◢✥◣˚ ༘༶•┈┈୨♡୧┈┈•༶*¡!ツ*･῾ᵎ⌇⁺◦✧.*┊♡ ͎.｡˚°‗❍❞⌒｡ₓ ूₒ ु˚ ूₒ ुₓ｡⭒❃.✮:▹ত✲꘏-ˋˏﾟ+*:ꔫ:*﹤✄┈" :: String
   mapM (\x -> if dontReplace x then return x else randomRIO (0 :: Int, length rep - 1) >>= \i -> return $ rep !! i) s
 
 dontReplace :: Char -> Bool
