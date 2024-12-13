@@ -155,9 +155,20 @@ utf16BE = T.encodeUtf16BE
 
 randomReplace :: String -> IO String
 randomReplace s = do
-  let emojis = "☄💓💖💕💞💘✨⭐🌟" :: String
   let rep = "$%#@*&^()!.*.⋆⍣ ೋ┊͙ ˘͈ᵕ˘͈⋆.ೃ࿔*:･*ੈ✩‧₊˚.ೃ࿐*˚˚·.༉‧₊˚.࿐ˊˎ-▓⋆·ˏˋ°•*⁀➷⋇⊶⊰⊱⊷⋇◢✥◣˚ ༘༶•┈┈୨♡୧┈┈•༶*¡!ツ*･῾ᵎ⌇⁺◦✧.*┊♡ ͎.｡˚°‗❍❞⌒｡ₓ ूₒ ु˚ ूₒ ुₓ｡⭒❃.✮:▹ত✲꘏-ˋˏﾟ+*:ꔫ:*﹤✄┈" :: String
-  mapM (\x -> if dontReplace x then return x else randomRIO (0 :: Int, length rep - 1) >>= \i -> return $ rep !! i) s
+  newS <- mapM (\x -> if dontReplace x then return x else randomRIO (0 :: Int, length rep - 1) >>= \i -> return $ rep !! i) s
+  sometimesEmoji newS
+
+sometimesEmoji :: String -> IO String
+sometimesEmoji s = do
+  i <- randomRIO (0 :: Int, 1000)
+  if i == 11
+    then do
+      j <- randomRIO (0 :: Int, length emojis - 1)
+      return $ s ++ [emojis !! j]
+    else return s
+  where
+    emojis = "☄💓💖💕💞💘✨⭐🌟" :: String
 
 dontReplace :: Char -> Bool
 dontReplace ' ' = True
@@ -166,7 +177,7 @@ dontReplace '\r' = True
 dontReplace _ = False
 
 displayHelp :: Ollamaphon ()
-displayHelp = outputStrLn "\nEnter text to generate sound!\n\ncommands:\n\tbasic: \\help, \\reset, \\quit\n\tchange mode: \\accum, \\replace\n\tchange encoding: \\utf8, \\utf16LE, \\utf16BE \n\tchange model: \\llama, \\qwen, \\mistral\n\tshow banner: \\banner\n"
+displayHelp = outputStrLn "\nEnter text to generate sound!\n\ncommands:\n\tbasic: \\help, \\quit\n\tchange mode: \\accum, \\replace\n\tchange encoding: \\utf8, \\utf16LE, \\utf16BE \n\tchange model: \\llama, \\qwen, \\mistral\n\tshow banner: \\banner\n"
 
 displayBanner :: Ollamaphon ()
 displayBanner = outputStrLn banner
