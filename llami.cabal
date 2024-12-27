@@ -16,7 +16,7 @@ common warnings
     ghc-options: -Wall
                  -threaded
 
-executable ollamaphon
+executable llami
     import:           warnings
     main-is:          Main.hs
     -- other-modules:
