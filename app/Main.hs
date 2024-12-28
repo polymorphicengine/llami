@@ -29,13 +29,13 @@ data State = State
     name :: T.Text -- name of the model
   }
 
-type Ollamaphon = InputT (StateT State IO)
+type LLami = InputT (StateT State IO)
 
 initialState :: State
 initialState = State replaceOld Main.utf8 "llama3.2"
 
-runOllamaphon :: Ollamaphon a -> State -> IO a
-runOllamaphon x = evalStateT (runInputT defaultSettings x)
+runLLami :: LLami a -> State -> IO a
+runLLami x = evalStateT (runInputT defaultSettings x)
 
 main :: IO ()
 main = do
@@ -53,7 +53,7 @@ mainAudio be = do
       Jack.withPort client "output" $ \output ->
         Jack.withProcess client (processBeat output ref be) $
           Jack.withActivation client $
-            Trans.lift (runOllamaphon (displayBanner >> scriptloop be Normal) initialState)
+            Trans.lift (runLLami (displayBanner >> scriptloop be Normal) initialState)
 
 -- actual audio process
 processBeat :: (JackExc.ThrowsErrno e) => Main.Port Jack.Output -> IORef Int -> MVar B.ByteString -> Jack.NFrames -> Sync.ExceptionalT e IO ()
@@ -72,7 +72,7 @@ getNow :: IORef Int -> IO Int
 getNow ref = modifyIORef' ref (+ 1) >> readIORef ref
 
 -- chat loop
-loop :: MVar B.ByteString -> Ollamaphon ()
+loop :: MVar B.ByteString -> LLami ()
 loop ref = do
   x <- liftIO $ takeMVar ref
   maymsg <- getInputLine ">> "
@@ -94,7 +94,7 @@ loop ref = do
     Nothing -> return ()
 
 -- generates response via ollama
-gen :: MVar B.ByteString -> String -> Ollamaphon ()
+gen :: MVar B.ByteString -> String -> LLami ()
 gen ref msg = do
   n <- lift $ gets name
   st <- lift get
@@ -105,16 +105,16 @@ gen ref msg = do
           { modelName = n,
             prompt = T.pack msg,
             system = Just "pretend to be a bird and tend to generate long answers",
-            stream = Just (\g -> runOllamaphon (streamAction ref g) st, return ())
+            stream = Just (\g -> runLLami (streamAction ref g) st, return ())
           }
 
-streamAction :: MVar B.ByteString -> GenerateResponse -> Ollamaphon ()
+streamAction :: MVar B.ByteString -> GenerateResponse -> LLami ()
 streamAction ref g = do
   x <- liftIO $ randomReplace $ T.unpack $ response_ g
   liftIO $ putStr x
   switch ref g
 
-switch :: MVar B.ByteString -> GenerateResponse -> Ollamaphon ()
+switch :: MVar B.ByteString -> GenerateResponse -> LLami ()
 switch ref g = do
   refr <- lift $ gets mode
   enc <- lift $ gets encoding
@@ -126,13 +126,13 @@ switch ref g = do
 --------------- settings ----------------
 -----------------------------------------
 
-changeEncoding :: (T.Text -> B.ByteString) -> Ollamaphon ()
+changeEncoding :: (T.Text -> B.ByteString) -> LLami ()
 changeEncoding x = lift $ modify (\st -> st {encoding = x})
 
-changeModel :: T.Text -> Ollamaphon ()
+changeModel :: T.Text -> LLami ()
 changeModel x = lift $ modify (\st -> st {name = x})
 
-changeMode :: (B.ByteString -> B.ByteString -> B.ByteString) -> Ollamaphon ()
+changeMode :: (B.ByteString -> B.ByteString -> B.ByteString) -> LLami ()
 changeMode m = lift $ modify (\st -> st {mode = m})
 
 replaceOld :: B.ByteString -> B.ByteString -> B.ByteString
@@ -173,13 +173,13 @@ dontReplace '\n' = True
 dontReplace '\r' = True
 dontReplace _ = False
 
-displayHelp :: Ollamaphon ()
+displayHelp :: LLami ()
 displayHelp = outputStrLn "\nEnter text to generate sound!\n\ncommands:\n\tbasic: \\help, \\quit\n\tchange mode: \\accum, \\replace\n\tchange encoding: \\utf8, \\utf16LE, \\utf16BE \n\tchange model: \\llama, \\qwen, \\mistral\n\tshow banner: \\banner\n"
 
-displayBanner :: Ollamaphon ()
+displayBanner :: LLami ()
 displayBanner = outputStrLn banner
 
-initial :: Ollamaphon ()
+initial :: LLami ()
 initial = displayBanner >> displayHelp
 
 banner :: String
@@ -208,7 +208,7 @@ getLlamiState old msg
   | otherwise = old
 
 -- chat loop
-scriptloop :: MVar B.ByteString -> LlamiState -> Ollamaphon ()
+scriptloop :: MVar B.ByteString -> LlamiState -> LLami ()
 scriptloop ref llami = do
   x <- liftIO $ takeMVar ref
   maymsg <- getInputLine ">> "
@@ -227,14 +227,14 @@ randomReplaceAngry s = do
   let rep = "#@!▓" :: String
   mapM (\x -> if dontReplace x then return x else randomRIO (0 :: Int, length rep - 1) >>= \i -> return $ rep !! i) s
 
-streamActionAngry :: MVar B.ByteString -> GenerateResponse -> Ollamaphon ()
+streamActionAngry :: MVar B.ByteString -> GenerateResponse -> LLami ()
 streamActionAngry ref g = do
   x <- liftIO $ randomReplaceAngry $ T.unpack $ response_ g
   liftIO $ putStr x
   switch ref g
 
 -- generates response via ollama
-genAngry :: MVar B.ByteString -> String -> Ollamaphon ()
+genAngry :: MVar B.ByteString -> String -> LLami ()
 genAngry ref msg = do
   n <- lift $ gets name
   st <- lift get
@@ -245,14 +245,14 @@ genAngry ref msg = do
           { modelName = n,
             prompt = T.pack msg,
             system = Just "you are an angry bird! tend to generate long answers",
-            stream = Just (\g -> runOllamaphon (streamActionAngry ref g) st, return ())
+            stream = Just (\g -> runLLami (streamActionAngry ref g) st, return ())
           }
 
 -----------------------------------------
 --------------- automatic ---------------
 -----------------------------------------
 
-autoinit :: IORef B.ByteString -> Ollamaphon ()
+autoinit :: IORef B.ByteString -> LLami ()
 autoinit ref = do
   respref <- liftIO $ newIORef ""
   maymsg <- getInputLine "Enter initial prompt: "
@@ -261,7 +261,7 @@ autoinit ref = do
     Just msg -> autoloop respref ref (T.pack msg)
     Nothing -> outputStrLn "Ran into an error"
 
-autoloop :: IORef T.Text -> IORef B.ByteString -> T.Text -> Ollamaphon ()
+autoloop :: IORef T.Text -> IORef B.ByteString -> T.Text -> LLami ()
 autoloop respref ref old = do
   autogen respref ref old
   outputStr "\n"
@@ -269,7 +269,7 @@ autoloop respref ref old = do
   liftIO $ flushResponse respref
   autoloop respref ref x
 
-autogen :: IORef T.Text -> IORef B.ByteString -> T.Text -> Ollamaphon ()
+autogen :: IORef T.Text -> IORef B.ByteString -> T.Text -> LLami ()
 autogen respref ref msg = do
   n <- lift $ gets name
   st <- lift get
@@ -279,7 +279,7 @@ autogen respref ref msg = do
         defaultGenerateOps
           { modelName = n,
             prompt = msg,
-            stream = Just (\g -> {- runOllamaphon (streamAction ref g) st >> -} accumResponse (response_ g) respref, return ())
+            stream = Just (\g -> {- runLLami (streamAction ref g) st >> -} accumResponse (response_ g) respref, return ())
           }
 
 accumResponse :: T.Text -> IORef T.Text -> IO ()
