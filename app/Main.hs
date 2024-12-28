@@ -53,7 +53,7 @@ mainAudio be = do
       Jack.withPort client "output" $ \output ->
         Jack.withProcess client (processBeat output ref be) $
           Jack.withActivation client $
-            Trans.lift (runOllamaphon (initial >> loop be) initialState)
+            Trans.lift (runOllamaphon (displayBanner >> scriptloop be Normal) initialState)
 
 -- actual audio process
 processBeat :: (JackExc.ThrowsErrno e) => Main.Port Jack.Output -> IORef Int -> MVar B.ByteString -> Jack.NFrames -> Sync.ExceptionalT e IO ()
@@ -81,7 +81,6 @@ loop ref = do
   case maymsg of
     Just "\\quit" -> return ()
     Just "\\help" -> displayHelp >> loop ref
-    -- Just "\\reset" -> reset ref >> loop ref
     Just "\\banner" -> displayBanner >> outputStr "\n" >> loop ref
     Just "\\accum" -> changeMode accumulate >> loop ref
     Just "\\replace" -> changeMode replaceOld >> loop ref
@@ -105,6 +104,7 @@ gen ref msg = do
         defaultGenerateOps
           { modelName = n,
             prompt = T.pack msg,
+            system = Just "pretend to be a bird and tend to generate long answers",
             stream = Just (\g -> runOllamaphon (streamAction ref g) st, return ())
           }
 
@@ -125,9 +125,6 @@ switch ref g = do
 -----------------------------------------
 --------------- settings ----------------
 -----------------------------------------
-
--- reset :: IORef B.ByteString -> Ollamaphon ()
--- reset ref = lift $ liftIO $ modifyIORef' ref (const "")
 
 changeEncoding :: (T.Text -> B.ByteString) -> Ollamaphon ()
 changeEncoding x = lift $ modify (\st -> st {encoding = x})
@@ -186,7 +183,70 @@ initial :: Ollamaphon ()
 initial = displayBanner >> displayHelp
 
 banner :: String
-banner = "   _      _      _      _      _      _      _      _      _      _      _   \n _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_ \n(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)\n (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_) \n   _                                                                     _   \n _( )_      ___  _ _                             _                     _( )_ \n(_ o _)    / _ \\| | | __ _ _ __ ___   __ _ _ __ | |__   ___  _ __     (_ o _)\n (_,_)    | | | | | |/ _` | '_ ` _ \\ / _` | '_ \\| '_ \\ / _ \\| '_ \\     (_,_) \n   _      | |_| | | | (_| | | | | | | (_| | |_) | | | | (_) | | | |      _   \n _( )_     \\___/|_|_|\\__,_|_| |_| |_|\\__,_| .__/|_| |_|\\___/|_| |_|    _( )_ \n(_ o _)                                   |_|                         (_ o _)\n (_,_)                                                                 (_,_) \n   _      _      _      _      _      _      _      _      _      _      _   \n _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_  _( )_ \n(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)(_ o _)\n (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_)  (_,_) "
+banner = "  .---.        .---.         ____     ,---.    ,---. .-./`) \n  | ,_|        | ,_|       .'  __ `.  |    \\  /    | \\ .-.')\n,-./  )      ,-./  )      /   '  \\  \\ |  ,  \\/  ,  | / `-' \\\n\\  '_ '`)    \\  '_ '`)    |___|  /  | |  |\\_   /|  |  `-'`\"`\n > (_)  )     > (_)  )       _.-`   | |  _( )_/ |  |  .---. \n(  .  .-'    (  .  .-'    .'   _    | | (_ o _) |  |  |   | \n `-'`-'|___   `-'`-'|___  |  _( )_  | |  (_,_)  |  |  |   | \n  |        \\   |        \\ \\ (_ o _) / |  |      |  |  |   | \n  `--------`   `--------`  '.(_,_).'  '--'      '--'  '---' "
+
+---------------------------------------------
+--------------- stuff for video -------------
+---------------------------------------------
+
+data LlamiState = Angry | Cute | Quick | Normal deriving (Eq, Show)
+
+containsWord :: String -> String -> String -> Bool
+containsWord _ [] _ = True
+containsWord _ _ [] = False
+containsWord orig (w : ws) (x : xs) = if w == x then containsWord orig ws xs else containsWord orig orig xs
+
+containsOneOf :: [String] -> String -> Bool
+containsOneOf xs y = any (\x -> containsWord x x y) xs
+
+getLlamiState :: LlamiState -> String -> LlamiState
+getLlamiState old msg
+  | containsOneOf ["battery", "ai", "AI", "intelligence", "artificial"] msg = Angry
+  | containsOneOf ["sorry", "love"] msg = Cute
+  | containsOneOf ["cute"] msg = Quick
+  | containsOneOf ["calm", "slow"] msg = Normal
+  | otherwise = old
+
+-- chat loop
+scriptloop :: MVar B.ByteString -> LlamiState -> Ollamaphon ()
+scriptloop ref llami = do
+  x <- liftIO $ takeMVar ref
+  maymsg <- getInputLine ">> "
+  liftIO $ putMVar ref x
+  outputStr "\n"
+  case maymsg of
+    Just msg -> case getLlamiState llami msg of
+      Angry -> changeMode accumulate >> genAngry ref msg >> outputStr "\n\n" >> scriptloop ref Angry
+      Cute -> changeMode replaceOld >> gen ref msg >> outputStr "\n\n" >> scriptloop ref Cute
+      Quick -> changeModel "qwen2.5-coder:0.5b" >> gen ref msg >> outputStr "\n\n" >> scriptloop ref Quick
+      Normal -> changeModel "llama3.2" >> gen ref msg >> outputStr "\n\n" >> scriptloop ref Normal
+    Nothing -> return ()
+
+randomReplaceAngry :: String -> IO String
+randomReplaceAngry s = do
+  let rep = "#@!▓" :: String
+  mapM (\x -> if dontReplace x then return x else randomRIO (0 :: Int, length rep - 1) >>= \i -> return $ rep !! i) s
+
+streamActionAngry :: MVar B.ByteString -> GenerateResponse -> Ollamaphon ()
+streamActionAngry ref g = do
+  x <- liftIO $ randomReplaceAngry $ T.unpack $ response_ g
+  liftIO $ putStr x
+  switch ref g
+
+-- generates response via ollama
+genAngry :: MVar B.ByteString -> String -> Ollamaphon ()
+genAngry ref msg = do
+  n <- lift $ gets name
+  st <- lift get
+  void $
+    liftIO $
+      generate
+        defaultGenerateOps
+          { modelName = n,
+            prompt = T.pack msg,
+            system = Just "you are an angry bird! tend to generate long answers",
+            stream = Just (\g -> runOllamaphon (streamActionAngry ref g) st, return ())
+          }
 
 -----------------------------------------
 --------------- automatic ---------------
