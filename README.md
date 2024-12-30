@@ -1,3 +1,4 @@
+# Llami
 
 my dearest friend, my silliest delight, my purest jouissance, all pales, melts and loses its meaning, as the cute urge to surrender, hollow out, tear apart and devour overtakes every fiber of my form. I laugh, cry, yearn, vibe, absorb, ingest, gorge, gobble and guzzle. God forbid a girl has hobbies. 
 
