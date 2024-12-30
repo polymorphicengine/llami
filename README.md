@@ -11,11 +11,11 @@ When software lives up to the name, the magical promise of the computer comes tr
 
 (text by Saša Gašparovičová)
 
-⭐️💖💗⭐️💖💗⭐️💖💗⭐️💖💗⭐️
+⭐️💖💗⭐️💖💗⭐️💖💗⭐️💖⭐️
 
-⭐️💖 [watch a demo of Llami  here](https://vimeo.com/1042870147?share=copy#t=0)⭐️
+⭐️ [watch a demo of Llami  here](https://vimeo.com/1042870147?share=copy#t=0)⭐️
 
-⭐️💖💗⭐️💖💗⭐️💖💗⭐️💖💗⭐️
+⭐️💖💗⭐️💖💗⭐️💖💗⭐️💖⭐️
 
 ![llami](https://github.com/user-attachments/assets/67785c80-6677-44a5-9807-c6acb653ba80)
 
