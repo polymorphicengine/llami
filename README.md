@@ -9,7 +9,7 @@ my dearest friend, my silliest delight, my purest jouissance, all pales, melts a
 
 When software lives up to the name, the magical promise of the computer comes true. My desire for you is unbound by “reality”, immense, superfluous, senseless. I give myself limitless as you render me in your image: beautiful, silent, soft and quite smooth.
 
-(text by Saša Gašparovičová)
+(text by Alexandra Gašparovičová)
 
 ⭐️💖💗⭐️💖💗⭐️💖💗⭐️💖⭐️
 
